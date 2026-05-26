@@ -1,14 +1,15 @@
-import type { NoteTag } from '../../types/note';
-import css from './NoteForm.module.css'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
+import type { NoteTag } from '../../types/note';
+import { createNote } from '../../services/noteService';
+import css from './NoteForm.module.css';
 
-interface NoteFormProps{
+interface NoteFormProps {
   onCancel: () => void;
-  onSubmit: (values: NoteFormValues) => void | Promise<void>;
 }
 
-interface NoteFormValues{
+interface NoteFormValues {
   title: string;
   content: string;
   tag: NoteTag;
@@ -17,21 +18,35 @@ interface NoteFormValues{
 const initialValues: NoteFormValues = {
   title: '',
   content: '',
-  tag: 'Todo'
+  tag: 'Todo',
 };
 
 const validationSchema = Yup.object({
   title: Yup.string().min(3).max(50).required(),
   content: Yup.string().max(500),
-  tag: Yup.string().oneOf(['Todo', 'Work', 'Personal', 'Meeting', 'Shopping']).required()
+  tag: Yup.string()
+    .oneOf(['Todo', 'Work', 'Personal', 'Meeting', 'Shopping'])
+    .required(),
 });
 
-export default function NoteForm({ onCancel, onSubmit }: NoteFormProps) {
+export default function NoteForm({ onCancel }: NoteFormProps) {
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: createNote,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      onCancel();
+    },
+  });
+
   return (
-  <Formik
+    <Formik
       initialValues={initialValues}
       validationSchema={validationSchema}
-      onSubmit={onSubmit}
+      onSubmit={async values => {
+        await createMutation.mutateAsync(values);
+      }}
     >
       {({ isSubmitting }) => (
         <Form className={css.form}>
@@ -94,7 +109,7 @@ export default function NoteForm({ onCancel, onSubmit }: NoteFormProps) {
             <button
               type="submit"
               className={css.submitButton}
-              disabled={isSubmitting}
+              disabled={isSubmitting || createMutation.isPending}
             >
               Create note
             </button>
@@ -102,5 +117,5 @@ export default function NoteForm({ onCancel, onSubmit }: NoteFormProps) {
         </Form>
       )}
     </Formik>
-  )
+  );
 }
